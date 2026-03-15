@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Everloop SDK Test Page</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f1117; color: #e1e4e8; min-height: 100vh; }
+
+    .header { background: #161b22; border-bottom: 1px solid #30363d; padding: 16px 24px; display: flex; align-items: center; gap: 12px; }
+    .header h1 { font-size: 18px; font-weight: 600; }
+    .header .badge { background: #238636; color: #fff; font-size: 11px; padding: 2px 8px; border-radius: 12px; }
+
+    .container { max-width: 960px; margin: 0 auto; padding: 24px; }
+
+    .config-panel {
+      background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 20px;
+    }
+    .config-panel h2 { font-size: 14px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+
+    .form-row { display: flex; gap: 12px; margin-bottom: 12px; align-items: flex-end; }
+    .form-group { flex: 1; }
+    .form-group label { display: block; font-size: 12px; color: #8b949e; margin-bottom: 4px; }
+    .form-group input, .form-group select {
+      width: 100%; padding: 8px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+      color: #e1e4e8; font-size: 14px; font-family: monospace;
+    }
+    .form-group input:focus, .form-group select:focus { outline: none; border-color: #58a6ff; }
+
+    .btn {
+      padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500;
+      transition: background 0.15s;
+    }
+    .btn-primary { background: #238636; color: #fff; }
+    .btn-primary:hover { background: #2ea043; }
+    .btn-secondary { background: #21262d; color: #e1e4e8; border: 1px solid #30363d; }
+    .btn-secondary:hover { background: #30363d; }
+    .btn-danger { background: #da3633; color: #fff; }
+    .btn-danger:hover { background: #f85149; }
+
+    .actions-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin-bottom: 20px; }
+    .action-card {
+      background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 14px; cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .action-card:hover { border-color: #58a6ff; }
+    .action-card h3 { font-size: 13px; margin-bottom: 4px; }
+    .action-card p { font-size: 11px; color: #8b949e; }
+
+    .console-panel {
+      background: #0d1117; border: 1px solid #30363d; border-radius: 8px; overflow: hidden;
+    }
+    .console-header {
+      background: #161b22; padding: 8px 16px; border-bottom: 1px solid #30363d;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .console-header span { font-size: 12px; color: #8b949e; }
+    .console-body {
+      padding: 12px 16px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px;
+      max-height: 400px; overflow-y: auto; line-height: 1.6;
+    }
+    .log-entry { padding: 2px 0; border-bottom: 1px solid #21262d; }
+    .log-info { color: #58a6ff; }
+    .log-success { color: #3fb950; }
+    .log-warn { color: #d29922; }
+    .log-error { color: #f85149; }
+    .log-time { color: #484f58; margin-right: 8px; }
+
+    .state-panel {
+      background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 20px;
+    }
+    .state-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+    .state-item label { font-size: 11px; color: #8b949e; display: block; }
+    .state-item .value { font-family: monospace; font-size: 13px; color: #58a6ff; word-break: break-all; }
+
+    .custom-event { margin-bottom: 20px; }
+    .custom-event textarea {
+      width: 100%; padding: 8px 12px; background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+      color: #e1e4e8; font-size: 13px; font-family: monospace; resize: vertical; min-height: 60px;
+    }
+    .custom-event textarea:focus { outline: none; border-color: #58a6ff; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Everloop SDK Tester</h1>
+  <span class="badge">DEV</span>
+</div>
+
+<div class="container">
+  <!-- Configuration -->
+  <div class="config-panel">
+    <h2>SDK Configuration</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label>CDN Base URL</label>
+        <input type="text" id="cdnUrl" value="https://cdn-dev.geteverloop.com">
+      </div>
+      <div class="form-group">
+        <label>Project ID</label>
+        <input type="text" id="projectId" placeholder="your-project-id">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Script</label>
+        <select id="scriptType">
+          <option value="everloop.min.js">everloop.min.js (Full SDK)</option>
+          <option value="everloop-pixel.min.js">everloop-pixel.min.js (Pixel only)</option>
+        </select>
+      </div>
+      <div>
+        <button class="btn btn-primary" onclick="loadSDK()">Load SDK</button>
+        <button class="btn btn-danger" onclick="unloadSDK()" style="margin-left:6px;">Unload</button>
+      </div>
+    </div>
+    <div style="margin-top:10px;">
+      <label style="font-size:12px;color:#8b949e;">Generated Script Tag:</label>
+      <div id="scriptPreview" style="font-family:monospace;font-size:12px;color:#d29922;background:#0d1117;padding:8px 12px;border-radius:6px;margin-top:4px;word-break:break-all;"></div>
+    </div>
+  </div>
+
+  <!-- SDK State -->
+  <div class="state-panel">
+    <h2 style="font-size:14px;color:#8b949e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">SDK State</h2>
+    <div class="state-grid" id="stateGrid">
+      <div class="state-item"><label>Status</label><div class="value" id="sdkStatus">Not loaded</div></div>
+      <div class="state-item"><label>Project ID</label><div class="value" id="stateProjectId">-</div></div>
+      <div class="state-item"><label>Session ID</label><div class="value" id="stateSessionId">-</div></div>
+      <div class="state-item"><label>Device ID</label><div class="value" id="stateDeviceId">-</div></div>
+      <div class="state-item"><label>User Token</label><div class="value" id="stateUserToken">-</div></div>
+      <div class="state-item"><label>Cookies Enabled</label><div class="value" id="stateCookies">-</div></div>
+    </div>
+  </div>
+
+  <!-- Actions -->
+  <h2 style="font-size:14px;color:#8b949e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">Actions</h2>
+  <div class="actions-grid">
+    <div class="action-card" onclick="trackPageView()">
+      <h3>Page View</h3>
+      <p>Track a page view event</p>
+    </div>
+    <div class="action-card" onclick="trackClick()">
+      <h3>Click Event</h3>
+      <p>Track a simulated click</p>
+    </div>
+    <div class="action-card" onclick="trackCustom()">
+      <h3>Custom Event</h3>
+      <p>Send custom event below</p>
+    </div>
+    <div class="action-card" onclick="refreshState()">
+      <h3>Refresh State</h3>
+      <p>Re-read SDK state</p>
+    </div>
+    <div class="action-card" onclick="inspectEFQ()">
+      <h3>Inspect EFQ</h3>
+      <p>Dump window.EFQ queue</p>
+    </div>
+    <div class="action-card" onclick="inspectCookies()">
+      <h3>View Cookies</h3>
+      <p>Show all document cookies</p>
+    </div>
+  </div>
+
+  <!-- Custom Event -->
+  <div class="custom-event">
+    <div class="form-row">
+      <div class="form-group">
+        <label>Event Name</label>
+        <input type="text" id="eventName" value="test_event" placeholder="event_name">
+      </div>
+    </div>
+    <label style="font-size:12px;color:#8b949e;display:block;margin-bottom:4px;">Event Properties (JSON)</label>
+    <textarea id="eventProps">{"key": "value", "test": true}</textarea>
+  </div>
+
+  <!-- Console -->
+  <div class="console-panel">
+    <div class="console-header">
+      <span>Console Output</span>
+      <button class="btn btn-secondary" onclick="clearConsole()" style="padding:4px 10px;font-size:11px;">Clear</button>
+    </div>
+    <div class="console-body" id="consoleBody"></div>
+  </div>
+</div>
+
+<script>
+  const SDK_BASE_URL_INPUT = document.getElementById('cdnUrl');
+  const PROJECT_ID_INPUT = document.getElementById('projectId');
+  const SCRIPT_TYPE = document.getElementById('scriptType');
+  const consoleBody = document.getElementById('consoleBody');
+  let sdkScriptEl = null;
+
+  // Initialize EFQ queue
+  window.EFQ = window.EFQ || [];
+
+  function getTimestamp() {
+    return new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  }
+
+  function log(msg, level = 'info') {
+    const entry = document.createElement('div');
+    entry.className = 'log-entry';
+    entry.innerHTML = `<span class="log-time">${getTimestamp()}</span><span class="log-${level}">${escapeHtml(String(msg))}</span>`;
+    consoleBody.appendChild(entry);
+    consoleBody.scrollTop = consoleBody.scrollHeight;
+  }
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  function clearConsole() {
+    consoleBody.innerHTML = '';
+  }
+
+  function updateScriptPreview() {
+    const base = SDK_BASE_URL_INPUT.value.replace(/\/$/, '');
+    const pid = PROJECT_ID_INPUT.value;
+    const script = SCRIPT_TYPE.value;
+    const config = encodeURIComponent(JSON.stringify({ project_id: pid }));
+    const tag = `<script src="${base}/${script}?config=${config}"><\/script>`;
+    document.getElementById('scriptPreview').textContent = tag;
+  }
+
+  SDK_BASE_URL_INPUT.addEventListener('input', updateScriptPreview);
+  PROJECT_ID_INPUT.addEventListener('input', updateScriptPreview);
+  SCRIPT_TYPE.addEventListener('change', updateScriptPreview);
+  updateScriptPreview();
+
+  function loadSDK() {
+    const base = SDK_BASE_URL_INPUT.value.replace(/\/$/, '');
+    const pid = PROJECT_ID_INPUT.value;
+    const script = SCRIPT_TYPE.value;
+
+    if (!pid) {
+      log('Project ID is required', 'error');
+      return;
+    }
+
+    // Remove existing SDK script if present
+    unloadSDK(true);
+
+    const config = encodeURIComponent(JSON.stringify({ project_id: pid }));
+    const src = `${base}/${script}?config=${config}`;
+
+    log(`Loading SDK from: ${src}`, 'info');
+    document.getElementById('sdkStatus').textContent = 'Loading...';
+
+    sdkScriptEl = document.createElement('script');
+    sdkScriptEl.src = src;
+    sdkScriptEl.id = 'everloop-sdk-script';
+
+    sdkScriptEl.onload = function() {
+      log('SDK script loaded successfully', 'success');
+      document.getElementById('sdkStatus').textContent = 'Loaded';
+      setTimeout(refreshState, 500);
+    };
+
+    sdkScriptEl.onerror = function() {
+      log('Failed to load SDK script. Check URL / Project ID / Network.', 'error');
+      document.getElementById('sdkStatus').textContent = 'Error';
+    };
+
+    document.head.appendChild(sdkScriptEl);
+  }
+
+  function unloadSDK(silent) {
+    if (sdkScriptEl) {
+      sdkScriptEl.remove();
+      sdkScriptEl = null;
+    }
+    const existing = document.getElementById('everloop-sdk-script');
+    if (existing) existing.remove();
+
+    if (!silent) {
+      log('SDK unloaded (note: side effects remain until page reload)', 'warn');
+      document.getElementById('sdkStatus').textContent = 'Unloaded';
+      document.getElementById('stateProjectId').textContent = '-';
+      document.getElementById('stateSessionId').textContent = '-';
+      document.getElementById('stateDeviceId').textContent = '-';
+      document.getElementById('stateUserToken').textContent = '-';
+      document.getElementById('stateCookies').textContent = '-';
+    }
+  }
+
+  function refreshState() {
+    try {
+      const ev = window.everloop;
+      if (!ev) {
+        log('window.everloop not available', 'warn');
+        return;
+      }
+
+      const state = ev.state || ev._state || {};
+      document.getElementById('stateProjectId').textContent = state.projectId || '-';
+      document.getElementById('stateSessionId').textContent = state.sessionId || '-';
+      document.getElementById('stateDeviceId').textContent = state.deviceId || '-';
+      document.getElementById('stateUserToken').textContent = state.userToken || '-';
+      document.getElementById('stateCookies').textContent = state.cookiesEnabled != null ? String(state.cookiesEnabled) : '-';
+      document.getElementById('sdkStatus').textContent = state.initialized ? 'Initialized' : 'Loaded (not init)';
+      log('State refreshed', 'success');
+    } catch (e) {
+      log('Error reading state: ' + e.message, 'error');
+    }
+  }
+
+  function trackPageView() {
+    try {
+      if (!window.everloop) { log('SDK not loaded', 'error'); return; }
+      if (typeof window.everloop.track === 'function') {
+        window.everloop.track('page_view', { url: window.location.href, title: document.title });
+        log('Tracked: page_view', 'success');
+      } else {
+        log('everloop.track() not available', 'warn');
+      }
+    } catch (e) { log('Error: ' + e.message, 'error'); }
+  }
+
+  function trackClick() {
+    try {
+      if (!window.everloop) { log('SDK not loaded', 'error'); return; }
+      if (typeof window.everloop.track === 'function') {
+        window.everloop.track('click', { element: 'test-button', timestamp: Date.now() });
+        log('Tracked: click', 'success');
+      } else {
+        log('everloop.track() not available', 'warn');
+      }
+    } catch (e) { log('Error: ' + e.message, 'error'); }
+  }
+
+  function trackCustom() {
+    try {
+      if (!window.everloop) { log('SDK not loaded', 'error'); return; }
+      const name = document.getElementById('eventName').value;
+      let props = {};
+      try { props = JSON.parse(document.getElementById('eventProps').value); } catch (e) { log('Invalid JSON in props', 'error'); return; }
+      if (typeof window.everloop.track === 'function') {
+        window.everloop.track(name, props);
+        log(`Tracked: ${name} with ${JSON.stringify(props)}`, 'success');
+      } else {
+        log('everloop.track() not available', 'warn');
+      }
+    } catch (e) { log('Error: ' + e.message, 'error'); }
+  }
+
+  function inspectEFQ() {
+    try {
+      const q = window.EFQ || [];
+      log(`EFQ queue (${q.length} items): ${JSON.stringify(q, null, 2)}`, 'info');
+    } catch (e) { log('Error: ' + e.message, 'error'); }
+  }
+
+  function inspectCookies() {
+    const cookies = document.cookie;
+    if (cookies) {
+      cookies.split(';').forEach(c => log(c.trim(), 'info'));
+    } else {
+      log('No cookies found on this domain', 'warn');
+    }
+  }
+
+  // Intercept console methods to mirror to our console panel
+  const origConsoleLog = console.log;
+  const origConsoleWarn = console.warn;
+  const origConsoleError = console.error;
+
+  console.log = function() {
+    origConsoleLog.apply(console, arguments);
+    log(Array.from(arguments).map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), 'info');
+  };
+  console.warn = function() {
+    origConsoleWarn.apply(console, arguments);
+    log(Array.from(arguments).map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), 'warn');
+  };
+  console.error = function() {
+    origConsoleError.apply(console, arguments);
+    log(Array.from(arguments).map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), 'error');
+  };
+
+  log('Everloop SDK Test Page ready. Enter a Project ID and click "Load SDK".', 'info');
+</script>
+
+</body>
+</html>
