@@ -138,21 +138,25 @@
   <!-- Actions -->
   <h2 style="font-size:14px;color:#8b949e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">Actions</h2>
   <div class="actions-grid">
-    <div class="action-card" onclick="trackPageView()">
-      <h3>Page View</h3>
-      <p>Track a page view event</p>
-    </div>
-    <div class="action-card" onclick="trackClick()">
-      <h3>Click Event</h3>
-      <p>Track a simulated click</p>
-    </div>
-    <div class="action-card" onclick="trackCustom()">
-      <h3>Custom Event</h3>
-      <p>Send custom event below</p>
+    <div class="action-card" onclick="trackConversion()">
+      <h3>Track Conversion</h3>
+      <p>everloop.trackConversion()</p>
     </div>
     <div class="action-card" onclick="refreshState()">
       <h3>Refresh State</h3>
-      <p>Re-read SDK state</p>
+      <p>Re-read core state + identity</p>
+    </div>
+    <div class="action-card" onclick="inspectCoreState()">
+      <h3>Core State</h3>
+      <p>Dump everloop.core.getCoreState()</p>
+    </div>
+    <div class="action-card" onclick="inspectIdentity()">
+      <h3>Identity</h3>
+      <p>Dump everloop.core.getIdentity()</p>
+    </div>
+    <div class="action-card" onclick="inspectCapabilities()">
+      <h3>Capabilities</h3>
+      <p>Show active capabilities</p>
     </div>
     <div class="action-card" onclick="inspectEFQ()">
       <h3>Inspect EFQ</h3>
@@ -162,17 +166,29 @@
       <h3>View Cookies</h3>
       <p>Show all document cookies</p>
     </div>
+    <div class="action-card" onclick="inspectAllMethods()">
+      <h3>SDK API</h3>
+      <p>List all everloop methods</p>
+    </div>
   </div>
 
-  <!-- Custom Event -->
+  <!-- Custom Conversion Event -->
   <div class="custom-event">
     <div class="form-row">
       <div class="form-group">
         <label>Event Name</label>
-        <input type="text" id="eventName" value="test_event" placeholder="event_name">
+        <input type="text" id="eventName" value="test_conversion" placeholder="event_name">
+      </div>
+      <div class="form-group">
+        <label>Event Value</label>
+        <input type="text" id="eventValue" value="100" placeholder="event_value">
+      </div>
+      <div class="form-group">
+        <label>Label</label>
+        <input type="text" id="eventLabel" value="test" placeholder="label">
       </div>
     </div>
-    <label style="font-size:12px;color:#8b949e;display:block;margin-bottom:4px;">Event Properties (JSON)</label>
+    <label style="font-size:12px;color:#8b949e;display:block;margin-bottom:4px;">Metadata (JSON)</label>
     <textarea id="eventProps">{"key": "value", "test": true}</textarea>
   </div>
 
@@ -296,55 +312,75 @@
         return;
       }
 
-      const state = ev.state || ev._state || {};
-      document.getElementById('stateProjectId').textContent = state.projectId || '-';
-      document.getElementById('stateSessionId').textContent = state.sessionId || '-';
-      document.getElementById('stateDeviceId').textContent = state.deviceId || '-';
-      document.getElementById('stateUserToken').textContent = state.userToken || '-';
-      document.getElementById('stateCookies').textContent = state.cookiesEnabled != null ? String(state.cookiesEnabled) : '-';
-      document.getElementById('sdkStatus').textContent = state.initialized ? 'Initialized' : 'Loaded (not init)';
+      // Use core API to read state
+      let projectId = '-', sessionId = '-', deviceId = '-', userToken = '-', initialized = false;
+
+      if (ev.core && typeof ev.core.getCoreState === 'function') {
+        const coreState = ev.core.getCoreState();
+        initialized = coreState.initialized || false;
+        if (coreState.project) {
+          projectId = coreState.project.projectId || '-';
+        }
+      }
+
+      if (ev.core && typeof ev.core.getIdentity === 'function') {
+        const identity = ev.core.getIdentity();
+        sessionId = identity.sessionId || '-';
+        deviceId = identity.deviceId || '-';
+        userToken = identity.userToken || '-';
+      }
+
+      document.getElementById('stateProjectId').textContent = projectId;
+      document.getElementById('stateSessionId').textContent = sessionId;
+      document.getElementById('stateDeviceId').textContent = deviceId;
+      document.getElementById('stateUserToken').textContent = userToken;
+      document.getElementById('stateCookies').textContent = '-';
+      document.getElementById('sdkStatus').textContent = initialized ? 'Initialized' : 'Loaded (not init)';
       log('State refreshed', 'success');
     } catch (e) {
       log('Error reading state: ' + e.message, 'error');
     }
   }
 
-  function trackPageView() {
-    try {
-      if (!window.everloop) { log('SDK not loaded', 'error'); return; }
-      if (typeof window.everloop.track === 'function') {
-        window.everloop.track('page_view', { url: window.location.href, title: document.title });
-        log('Tracked: page_view', 'success');
-      } else {
-        log('everloop.track() not available', 'warn');
-      }
-    } catch (e) { log('Error: ' + e.message, 'error'); }
-  }
-
-  function trackClick() {
-    try {
-      if (!window.everloop) { log('SDK not loaded', 'error'); return; }
-      if (typeof window.everloop.track === 'function') {
-        window.everloop.track('click', { element: 'test-button', timestamp: Date.now() });
-        log('Tracked: click', 'success');
-      } else {
-        log('everloop.track() not available', 'warn');
-      }
-    } catch (e) { log('Error: ' + e.message, 'error'); }
-  }
-
-  function trackCustom() {
+  function trackConversion() {
     try {
       if (!window.everloop) { log('SDK not loaded', 'error'); return; }
       const name = document.getElementById('eventName').value;
-      let props = {};
-      try { props = JSON.parse(document.getElementById('eventProps').value); } catch (e) { log('Invalid JSON in props', 'error'); return; }
-      if (typeof window.everloop.track === 'function') {
-        window.everloop.track(name, props);
-        log(`Tracked: ${name} with ${JSON.stringify(props)}`, 'success');
+      const value = document.getElementById('eventValue').value;
+      const label = document.getElementById('eventLabel').value;
+      let metadata = {};
+      try { metadata = JSON.parse(document.getElementById('eventProps').value); } catch (e) { log('Invalid JSON in metadata', 'error'); return; }
+
+      if (typeof window.everloop.trackConversion === 'function') {
+        window.everloop.trackConversion(name, value, label, metadata);
+        log(`trackConversion("${name}", "${value}", "${label}", ${JSON.stringify(metadata)})`, 'success');
       } else {
-        log('everloop.track() not available', 'warn');
+        log('everloop.trackConversion() not available', 'warn');
       }
+    } catch (e) { log('Error: ' + e.message, 'error'); }
+  }
+
+  function inspectCoreState() {
+    try {
+      if (!window.everloop || !window.everloop.core) { log('SDK core not available', 'error'); return; }
+      const coreState = window.everloop.core.getCoreState();
+      log('Core State: ' + JSON.stringify(coreState, null, 2), 'info');
+    } catch (e) { log('Error: ' + e.message, 'error'); }
+  }
+
+  function inspectIdentity() {
+    try {
+      if (!window.everloop || !window.everloop.core) { log('SDK core not available', 'error'); return; }
+      const identity = window.everloop.core.getIdentity();
+      log('Identity: ' + JSON.stringify(identity, null, 2), 'info');
+    } catch (e) { log('Error: ' + e.message, 'error'); }
+  }
+
+  function inspectCapabilities() {
+    try {
+      if (!window.everloop || !window.everloop.capabilities) { log('SDK capabilities not available', 'error'); return; }
+      const active = window.everloop.capabilities.getActive();
+      log('Active capabilities: ' + JSON.stringify(active), 'info');
     } catch (e) { log('Error: ' + e.message, 'error'); }
   }
 
@@ -362,6 +398,28 @@
     } else {
       log('No cookies found on this domain', 'warn');
     }
+  }
+
+  function inspectAllMethods() {
+    try {
+      if (!window.everloop) { log('SDK not loaded', 'error'); return; }
+      const methods = [];
+      for (const key in window.everloop) {
+        const type = typeof window.everloop[key];
+        if (type === 'function') {
+          methods.push(`everloop.${key}()`);
+        } else if (type === 'object' && window.everloop[key]) {
+          const sub = [];
+          for (const k2 in window.everloop[key]) {
+            sub.push(`everloop.${key}.${k2}` + (typeof window.everloop[key][k2] === 'function' ? '()' : ''));
+          }
+          methods.push(...sub);
+        } else {
+          methods.push(`everloop.${key} [${type}]`);
+        }
+      }
+      log('SDK API:\n' + methods.join('\n'), 'info');
+    } catch (e) { log('Error: ' + e.message, 'error'); }
   }
 
   // Intercept console methods to mirror to our console panel
