@@ -365,12 +365,20 @@
         userToken = identity.userToken || '-';
       }
 
+      // Also try reading project context
+      if (projectId === '-' && ev.core && typeof ev.core.getProjectContext === 'function') {
+        var proj = ev.core.getProjectContext();
+        if (proj) projectId = proj.projectId || '-';
+      }
+
       document.getElementById('stateProjectId').textContent = projectId;
       document.getElementById('stateSessionId').textContent = sessionId;
       document.getElementById('stateDeviceId').textContent = deviceId;
       document.getElementById('stateUserToken').textContent = userToken;
       document.getElementById('stateCookies').textContent = '-';
-      document.getElementById('sdkStatus').textContent = initialized ? 'Initialized' : 'Loaded (not init)';
+      // SDK is initialized if we have a real session ID
+      var isInit = sessionId !== '-' && sessionId.length > 10;
+      document.getElementById('sdkStatus').textContent = isInit ? 'Initialized' : 'Loaded (not init)';
       log('State refreshed', 'success');
     } catch (e) {
       log('Error reading state: ' + e.message, 'error');
@@ -494,31 +502,39 @@
     }
   }
 
-  // Poll for SDK initialization (init() is async, fetches project config from CDN)
+  // Poll for SDK initialization. The internal state.initialized in everloop.ts
+  // is not exposed via core.getCoreState().initialized (markInitialized() is never
+  // called), so we detect init by checking if identity has real values.
   let pollCount = 0;
   let pollTimer = null;
+  let sdkInitDetected = false;
+
   function pollForInit() {
     if (pollTimer) clearInterval(pollTimer);
     pollCount = 0;
+    sdkInitDetected = false;
     pollTimer = setInterval(function() {
       pollCount++;
+      if (sdkInitDetected) return; // Already detected via log intercept
       const ev = window.everloop;
-      if (ev && ev.core && typeof ev.core.getCoreState === 'function') {
-        const cs = ev.core.getCoreState();
-        if (cs.initialized) {
-          clearInterval(pollTimer);
-          pollTimer = null;
-          log('SDK initialized! (detected after ~' + (pollCount * 0.5) + 's)', 'success');
-          refreshState();
-          return;
-        }
+      if (ev && ev.core && typeof ev.core.getIdentity === 'function') {
+        try {
+          const id = ev.core.getIdentity();
+          // Identity has real UUIDs = SDK has initialized far enough
+          if (id.sessionId && id.sessionId.length > 10) {
+            sdkInitDetected = true;
+            clearInterval(pollTimer);
+            pollTimer = null;
+            refreshState();
+            return;
+          }
+        } catch (e) {}
       }
-      // Update status while waiting
       document.getElementById('sdkStatus').textContent = 'Waiting for init... (' + (pollCount * 0.5) + 's)';
-      if (pollCount >= 60) { // 30s timeout
+      if (pollCount >= 60) {
         clearInterval(pollTimer);
         pollTimer = null;
-        log('SDK did not initialize after 30s. It may be waiting for segmentation data or project config.', 'warn');
+        log('SDK did not initialize after 30s.', 'warn');
         refreshState();
       }
     }, 500);
