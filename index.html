@@ -238,8 +238,7 @@
     const base = SDK_BASE_URL_INPUT.value.replace(/\/$/, '');
     const pid = PROJECT_ID_INPUT.value;
     const script = SCRIPT_TYPE.value;
-    const config = encodeURIComponent(JSON.stringify({ project_id: pid }));
-    const tag = `<script src="${base}/${script}?config=${config}"><\/script>`;
+    const tag = `<script src="${base}/${script}?project_id=${encodeURIComponent(pid)}"><\/script>`;
     document.getElementById('scriptPreview').textContent = tag;
   }
 
@@ -261,8 +260,7 @@
     // Remove existing SDK script if present
     unloadSDK(true);
 
-    const config = encodeURIComponent(JSON.stringify({ project_id: pid }));
-    const src = `${base}/${script}?config=${config}`;
+    const src = `${base}/${script}?project_id=${encodeURIComponent(pid)}`;
 
     log(`Loading SDK from: ${src}`, 'info');
     document.getElementById('sdkStatus').textContent = 'Loading...';
