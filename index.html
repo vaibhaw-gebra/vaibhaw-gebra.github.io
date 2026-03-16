@@ -238,7 +238,7 @@
     const base = SDK_BASE_URL_INPUT.value.replace(/\/$/, '');
     const pid = PROJECT_ID_INPUT.value;
     const script = SCRIPT_TYPE.value;
-    const tag = `<script src="${base}/${script}?project_id=${encodeURIComponent(pid)}"><\/script>`;
+    const tag = `<link rel="preload" href="${base}/${script}?project_id=${pid}" as="script" />\n<script>(function(w,d,s,p){var st=d.createElement(s);st.innerHTML="body{opacity:0!important;}";var h=function(){d.head.appendChild(st);},sh=function(){st.remove();};h();setTimeout(sh,2e3);d.addEventListener("everloop:show",sh);w.EFQ=w.EFQ||[];w.EFQ.push({config:{projectId:p}});var j=d.createElement("script");j.src="${base}/${script}?project_id="+p;j.async=1;d.head.appendChild(j);})(window,document,"style","${pid}");<\/script>`;
     document.getElementById('scriptPreview').textContent = tag;
   }
 
@@ -261,63 +261,77 @@
     unloadSDK(true);
 
     const src = `${base}/${script}?project_id=${encodeURIComponent(pid)}`;
-
-    // Push config to EFQ BEFORE loading SDK.
-    // The SDK's init() does getCommandFromQueue(cmd => !!cmd.config) synchronously
-    // and uses config.projectId to set state.projectId. Without this, init() aborts
-    // with "No project ID found".
-    window.EFQ = window.EFQ || [];
-    window.EFQ.push({ config: { projectId: pid } });
-    log(`Pushed {config: {projectId: "${pid}"}} to EFQ`, 'info');
-
-    log(`Loading SDK from: ${src}`, 'info');
+    log(`Loading SDK using Vite plugin pattern for project: ${pid}`, 'info');
     document.getElementById('sdkStatus').textContent = 'Loading...';
 
-    sdkScriptEl = document.createElement('script');
-    sdkScriptEl.src = src;
-    sdkScriptEl.id = 'everloop-sdk-script';
+    // Replicate the exact injection from inject-everloop-sdk.ts Vite plugin:
+    // 1. Anti-flicker style (hide body until SDK shows page)
+    // 2. Push {config: {projectId}} to EFQ (required by init())
+    // 3. Load SDK script async
+    (function(w, d, s, p) {
+      // Anti-flicker: hide body, remove after 2s or on everloop:show event
+      var st = d.createElement(s);
+      st.id = 'everloop-antiflicker';
+      st.innerHTML = "body{opacity:0!important;}";
+      var h = function() { d.head.appendChild(st); };
+      var sh = function() { st.remove(); };
+      h();
+      setTimeout(sh, 2e3);
+      d.addEventListener("everloop:show", sh);
 
-    sdkScriptEl.onload = function() {
-      log('SDK script loaded successfully', 'success');
-      document.getElementById('sdkStatus').textContent = 'Loaded';
+      // Push config to EFQ (init() reads this synchronously)
+      w.EFQ = w.EFQ || [];
+      w.EFQ.push({ config: { projectId: p } });
 
-      // Force-enable debug logging on the SDK so we can see its output
-      enableSDKDebugLogging();
+      // Load SDK script
+      var j = d.createElement("script");
+      j.src = src;
+      j.async = 1;
+      j.id = 'everloop-sdk-script';
+      sdkScriptEl = j;
+      d.head.appendChild(j);
+    })(window, document, "style", pid);
 
-      // The SDK init() awaits waitForCommand(cmd => !!cmd.segmentationHeaders) which
-      // expects everloop-context.js to push geo data to EFQ. That script is loaded by
-      // the CDN response and does a geo-IP lookup. If it fails (CORS, network, etc.),
-      // init() hangs for up to 1 hour. Push fallback segmentation headers after a delay
-      // so init() can proceed.
-      setTimeout(function() {
-        // Check if segmentation headers are already in EFQ
-        var hasSegHeaders = (window.EFQ || []).some(function(cmd) {
-          return cmd && cmd.segmentationHeaders;
-        });
-        if (!hasSegHeaders) {
-          log('Segmentation headers not found in EFQ after 3s, pushing fallback headers', 'warn');
-          window.EFQ = window.EFQ || [];
-          window.EFQ.push({
-            segmentationHeaders: {
-              "x-is-mobile-viewer": /mobile|android|iphone|ipad|ipod/i.test(navigator.userAgent) ? "true" : "false",
-              "x-viewer-city": "Unknown",
-              "x-viewer-country": "Unknown",
-              "x-viewer-region": "Unknown"
-            }
+    log('Anti-flicker style injected, EFQ config pushed, SDK script loading', 'info');
+
+    // After script loads: enable debug logging and handle segmentation fallback
+    var checkScriptLoaded = setInterval(function() {
+      if (window.everloop) {
+        clearInterval(checkScriptLoaded);
+        log('SDK script loaded (window.everloop available)', 'success');
+        enableSDKDebugLogging();
+
+        // Fallback: push segmentation headers if CDN's everloop-context.js fails
+        setTimeout(function() {
+          var hasSegHeaders = (window.EFQ || []).some(function(cmd) {
+            return cmd && cmd.segmentationHeaders;
           });
-        }
-      }, 3000);
+          if (!hasSegHeaders) {
+            log('Pushing fallback segmentation headers (CDN context script unavailable)', 'warn');
+            window.EFQ.push({
+              segmentationHeaders: {
+                "x-is-mobile-viewer": /mobile|android|iphone|ipad|ipod/i.test(navigator.userAgent) ? "true" : "false",
+                "x-viewer-city": "Unknown",
+                "x-viewer-country": "Unknown",
+                "x-viewer-region": "Unknown"
+              }
+            });
+          }
+        }, 2000);
 
-      // Poll for initialization (init() is async, waits for project config from CDN)
-      pollForInit();
-    };
+        // Poll for init completion
+        pollForInit();
+      }
+    }, 100);
 
-    sdkScriptEl.onerror = function() {
-      log('Failed to load SDK script. Check URL / Project ID / Network.', 'error');
-      document.getElementById('sdkStatus').textContent = 'Error';
-    };
-
-    document.head.appendChild(sdkScriptEl);
+    // Timeout if script never loads
+    setTimeout(function() {
+      clearInterval(checkScriptLoaded);
+      if (!window.everloop) {
+        log('SDK script failed to load after 10s', 'error');
+        document.getElementById('sdkStatus').textContent = 'Error';
+      }
+    }, 10000);
   }
 
   function unloadSDK(silent) {
