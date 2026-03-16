@@ -274,7 +274,12 @@
     sdkScriptEl.onload = function() {
       log('SDK script loaded successfully', 'success');
       document.getElementById('sdkStatus').textContent = 'Loaded';
-      setTimeout(refreshState, 500);
+
+      // Force-enable debug logging on the SDK so we can see its output
+      enableSDKDebugLogging();
+
+      // Poll for initialization (init() is async, waits for project config from CDN)
+      pollForInit();
     };
 
     sdkScriptEl.onerror = function() {
@@ -420,6 +425,80 @@
       }
       log('SDK API:\n' + methods.join('\n'), 'info');
     } catch (e) { log('Error: ' + e.message, 'error'); }
+  }
+
+  // Force-enable SDK debug logging by replacing the noop logger
+  function enableSDKDebugLogging() {
+    if (!window.everloop) return;
+    try {
+      window.everloop.log = {
+        info: function() { log('[Everloop] ' + Array.from(arguments).map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), 'info'); },
+        warn: function() { log('[Everloop] ' + Array.from(arguments).map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), 'warn'); },
+        error: function() { log('[Everloop] ' + Array.from(arguments).map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), 'error'); },
+        debug: function() { log('[Everloop] ' + Array.from(arguments).map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), 'info'); },
+      };
+      log('Debug logging enabled on SDK', 'success');
+    } catch (e) {
+      log('Could not enable SDK debug logging: ' + e.message, 'warn');
+    }
+  }
+
+  // Poll for SDK initialization (init() is async, fetches project config from CDN)
+  let pollCount = 0;
+  let pollTimer = null;
+  function pollForInit() {
+    if (pollTimer) clearInterval(pollTimer);
+    pollCount = 0;
+    pollTimer = setInterval(function() {
+      pollCount++;
+      const ev = window.everloop;
+      if (ev && ev.core && typeof ev.core.getCoreState === 'function') {
+        const cs = ev.core.getCoreState();
+        if (cs.initialized) {
+          clearInterval(pollTimer);
+          pollTimer = null;
+          log('SDK initialized! (detected after ~' + (pollCount * 0.5) + 's)', 'success');
+          refreshState();
+          return;
+        }
+      }
+      // Update status while waiting
+      document.getElementById('sdkStatus').textContent = 'Waiting for init... (' + (pollCount * 0.5) + 's)';
+      if (pollCount >= 60) { // 30s timeout
+        clearInterval(pollTimer);
+        pollTimer = null;
+        log('SDK did not initialize after 30s. It may be waiting for segmentation data or project config.', 'warn');
+        refreshState();
+      }
+    }, 500);
+  }
+
+  // Monitor network requests to see SDK traffic
+  const origFetch = window.fetch;
+  window.fetch = function() {
+    const url = arguments[0];
+    if (typeof url === 'string' && (url.includes('everloop') || url.includes('geteverloop') || url.includes('ingest') || url.includes('event'))) {
+      log('Fetch: ' + url, 'info');
+    }
+    return origFetch.apply(this, arguments);
+  };
+
+  const origXhrOpen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function(method, url) {
+    if (typeof url === 'string' && (url.includes('everloop') || url.includes('geteverloop') || url.includes('ingest') || url.includes('event'))) {
+      log('XHR: ' + method + ' ' + url, 'info');
+    }
+    return origXhrOpen.apply(this, arguments);
+  };
+
+  const origSendBeacon = navigator.sendBeacon;
+  if (origSendBeacon) {
+    navigator.sendBeacon = function(url, data) {
+      if (typeof url === 'string') {
+        log('Beacon: ' + url + ' (' + (data ? data.length || JSON.stringify(data).length : 0) + ' bytes)', 'info');
+      }
+      return origSendBeacon.apply(this, arguments);
+    };
   }
 
   // Intercept console methods to mirror to our console panel
