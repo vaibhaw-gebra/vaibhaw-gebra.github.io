@@ -278,6 +278,30 @@
       // Force-enable debug logging on the SDK so we can see its output
       enableSDKDebugLogging();
 
+      // The SDK init() awaits waitForCommand(cmd => !!cmd.segmentationHeaders) which
+      // expects everloop-context.js to push geo data to EFQ. That script is loaded by
+      // the CDN response and does a geo-IP lookup. If it fails (CORS, network, etc.),
+      // init() hangs for up to 1 hour. Push fallback segmentation headers after a delay
+      // so init() can proceed.
+      setTimeout(function() {
+        // Check if segmentation headers are already in EFQ
+        var hasSegHeaders = (window.EFQ || []).some(function(cmd) {
+          return cmd && cmd.segmentationHeaders;
+        });
+        if (!hasSegHeaders) {
+          log('Segmentation headers not found in EFQ after 3s, pushing fallback headers', 'warn');
+          window.EFQ = window.EFQ || [];
+          window.EFQ.push({
+            segmentationHeaders: {
+              "x-is-mobile-viewer": /mobile|android|iphone|ipad|ipod/i.test(navigator.userAgent) ? "true" : "false",
+              "x-viewer-city": "Unknown",
+              "x-viewer-country": "Unknown",
+              "x-viewer-region": "Unknown"
+            }
+          });
+        }
+      }, 3000);
+
       // Poll for initialization (init() is async, waits for project config from CDN)
       pollForInit();
     };
