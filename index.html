@@ -458,14 +458,35 @@
   }
 
   // Force-enable SDK debug logging by replacing the noop logger
+  // Suppress known spammy messages from mutation observer / scroll tracking
+  var suppressedMsgCounts = {};
+  var SUPPRESSED_PATTERNS = [
+    'No variant to track visibility for',
+  ];
+
+  function sdkLog(level, args) {
+    var msg = Array.from(args).map(function(a) { return typeof a === 'object' ? JSON.stringify(a) : String(a); }).join(' ');
+    for (var i = 0; i < SUPPRESSED_PATTERNS.length; i++) {
+      if (msg.includes(SUPPRESSED_PATTERNS[i])) {
+        var key = SUPPRESSED_PATTERNS[i];
+        suppressedMsgCounts[key] = (suppressedMsgCounts[key] || 0) + 1;
+        if (suppressedMsgCounts[key] === 1) {
+          log('[Everloop] ' + msg + ' (further repeats suppressed)', level);
+        }
+        return;
+      }
+    }
+    log('[Everloop] ' + msg, level);
+  }
+
   function enableSDKDebugLogging() {
     if (!window.everloop) return;
     try {
       window.everloop.log = {
-        info: function() { log('[Everloop] ' + Array.from(arguments).map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), 'info'); },
-        warn: function() { log('[Everloop] ' + Array.from(arguments).map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), 'warn'); },
-        error: function() { log('[Everloop] ' + Array.from(arguments).map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), 'error'); },
-        debug: function() { log('[Everloop] ' + Array.from(arguments).map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '), 'info'); },
+        info: function() { sdkLog('info', arguments); },
+        warn: function() { sdkLog('warn', arguments); },
+        error: function() { sdkLog('error', arguments); },
+        debug: function() { sdkLog('info', arguments); },
       };
       log('Debug logging enabled on SDK', 'success');
     } catch (e) {
