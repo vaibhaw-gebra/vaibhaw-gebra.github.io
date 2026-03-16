@@ -474,6 +474,13 @@
 
   function sdkLog(level, args) {
     var msg = Array.from(args).map(function(a) { return typeof a === 'object' ? JSON.stringify(a) : String(a); }).join(' ');
+    // Detect SDK initialization from its own log message
+    if (msg.includes('initialized successfully')) {
+      sdkInitDetected = true;
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+      document.getElementById('sdkStatus').textContent = 'Initialized';
+      setTimeout(refreshState, 100);
+    }
     for (var i = 0; i < SUPPRESSED_PATTERNS.length; i++) {
       if (msg.includes(SUPPRESSED_PATTERNS[i])) {
         var key = SUPPRESSED_PATTERNS[i];
