@@ -262,6 +262,14 @@
 
     const src = `${base}/${script}?project_id=${encodeURIComponent(pid)}`;
 
+    // Push config to EFQ BEFORE loading SDK.
+    // The SDK's init() does getCommandFromQueue(cmd => !!cmd.config) synchronously
+    // and uses config.projectId to set state.projectId. Without this, init() aborts
+    // with "No project ID found".
+    window.EFQ = window.EFQ || [];
+    window.EFQ.push({ config: { projectId: pid } });
+    log(`Pushed {config: {projectId: "${pid}"}} to EFQ`, 'info');
+
     log(`Loading SDK from: ${src}`, 'info');
     document.getElementById('sdkStatus').textContent = 'Loading...';
 
